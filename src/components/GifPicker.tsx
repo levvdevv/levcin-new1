@@ -53,7 +53,7 @@ const GifPicker: React.FC<GifPickerProps> = ({ onGifSelect, onClose }) => {
   };
 
   return (
-    <div className="absolute bottom-12 right-0 bg-white border border-gray-200 rounded-lg shadow-lg w-80 h-96 z-20">
+    <div className="absolute bottom-12 right-0 bg-white border border-gray-200 rounded-lg shadow-lg w-72 md:w-80 h-80 md:h-96 z-20">
       <div className="p-3 border-b border-gray-200 flex items-center justify-between">
         <h3 className="font-medium text-gray-900">Choose a GIF</h3>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -75,18 +75,18 @@ const GifPicker: React.FC<GifPickerProps> = ({ onGifSelect, onClose }) => {
         </div>
       </div>
       
-      <div className="p-2 h-64 overflow-y-auto">
+      <div className="p-2 h-48 md:h-64 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-sm text-gray-500">Loading GIFs...</div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-2 gap-1 md:gap-2">
             {gifs.map((gif) => (
               <button
                 key={gif.id}
                 onClick={() => handleGifClick(gif.images.fixed_height.url)}
-                className="aspect-square bg-gray-100 rounded-lg overflow-hidden hover:opacity-80 transition-opacity"
+                className="aspect-square bg-gray-100 rounded overflow-hidden hover:opacity-80 transition-opacity"
               >
                 <img
                   src={gif.images.fixed_height.url}

@@ -375,8 +375,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
   };
 
   return (
-    <div className="h-screen bg-gray-50 flex flex-col" {...getRootProps()}>
-      <input {...getInputProps()} />
+    <div className="h-screen bg-gray-50 flex flex-col">
       
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
@@ -392,18 +391,18 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
           </div>
         </div>
         
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 md:space-x-3">
           {/* Search */}
           <div className="relative">
             <button
               onClick={() => setShowSearch(!showSearch)}
-              className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
+              className="p-1.5 md:p-2 text-gray-600 hover:text-blue-600 transition-colors"
             >
-              <Search className="w-5 h-5" />
+              <Search className="w-4 h-4 md:w-5 md:h-5" />
             </button>
             
             {showSearch && (
-              <div className="absolute right-0 top-12 bg-white border border-gray-200 rounded-lg shadow-lg p-4 w-80 z-10">
+              <div className="absolute right-0 top-12 bg-white border border-gray-200 rounded-lg shadow-lg p-4 w-72 md:w-80 z-10">
                 <div className="flex space-x-2 mb-3">
                   <input
                     type="text"
@@ -439,27 +438,27 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
           {/* Call buttons */}
           <button
             onClick={() => handleStartCall('voice')}
-            className="p-2 text-gray-600 hover:text-green-600 transition-colors"
+            className="p-1.5 md:p-2 text-gray-600 hover:text-green-600 transition-colors"
             title="Start voice call"
           >
-            <Phone className="w-5 h-5" />
+            <Phone className="w-4 h-4 md:w-5 md:h-5" />
           </button>
           
           <button
             onClick={() => handleStartCall('video')}
-            className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
+            className="p-1.5 md:p-2 text-gray-600 hover:text-blue-600 transition-colors"
             title="Start video call"
           >
-            <VideoIcon className="w-5 h-5" />
+            <VideoIcon className="w-4 h-4 md:w-5 md:h-5" />
           </button>
           
-          <span className="text-sm text-gray-600">Logged in as {username}</span>
+          <span className="hidden md:inline text-sm text-gray-600">Logged in as {username}</span>
           <button
             onClick={onLogout}
-            className="flex items-center space-x-1 text-gray-600 hover:text-red-600 transition-colors duration-200"
+            className="flex items-center space-x-1 text-gray-600 hover:text-red-600 transition-colors duration-200 text-sm"
           >
             <LogOut className="w-4 h-4" />
-            <span>Logout</span>
+            <span className="hidden md:inline">Logout</span>
           </button>
         </div>
       </div>
@@ -480,21 +479,27 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
       )}
 
       {/* Online Users */}
-      <div className="bg-gray-100 px-4 py-2 border-b border-gray-200">
+      <div className="bg-gray-100 px-4 py-2 border-b border-gray-200 overflow-x-auto">
         <div className="flex items-center space-x-2 text-sm text-gray-600">
           <span>Online:</span>
-          {onlineUsers.map((user, index) => (
-            <span key={user} className="flex items-center">
-              <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
-              {user}
-              {index < onlineUsers.length - 1 && <span className="mx-1">,</span>}
-            </span>
-          ))}
+          <div className="flex items-center space-x-2 whitespace-nowrap">
+            {onlineUsers.map((user, index) => (
+              <span key={user} className="flex items-center">
+                <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
+                {user}
+                {index < onlineUsers.length - 1 && <span className="mx-1">,</span>}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* Drag and Drop Overlay */}
+      <div 
+        {...getRootProps()}
+        className={`${isDragActive ? 'fixed inset-0 z-50' : 'hidden'}`}
+      >
+        <input {...getInputProps()} />
         {isDragActive && (
           <div className="fixed inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center z-50">
             <div className="bg-white p-8 rounded-lg shadow-lg text-center">
@@ -503,7 +508,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
             </div>
           </div>
         )}
-        
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
           <div className="text-center text-gray-500 mt-8">
             <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300" />
@@ -523,7 +531,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
                     : 'bg-white border border-gray-200 text-gray-900'
                 }`}
               >
-                <div className="flex items-center space-x-2 mb-1">
+                <div className="flex items-center space-x-1 md:space-x-2 mb-1">
                   <span className={`text-xs font-medium ${
                     message.username === username ? 'text-blue-100' : 'text-gray-600'
                   }`}>
@@ -581,14 +589,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
                               {formatFileSize(message.attachment.size)}
                             </p>
                           </div>
-                        ) : message.type === 'gif' ? (
-                          <div className="space-y-2">
-                            <img
-                              src={message.content}
-                              alt="GIF"
-                              className="max-w-full h-auto rounded max-h-48"
-                            />
-                          </div>
                           <a
                             href={message.attachment.url}
                             download={message.attachment.originalName}
@@ -601,10 +601,18 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
                           <img
                             src={message.attachment.url}
                             alt={message.attachment.originalName}
-                            className="max-w-full h-auto rounded"
+                            className="max-w-full h-auto rounded max-h-64"
                           />
                         )}
                         <p className="text-sm">{message.content}</p>
+                      </div>
+                    ) : message.type === 'gif' ? (
+                      <div className="space-y-2">
+                        <img
+                          src={message.content}
+                          alt="GIF"
+                          className="max-w-full h-auto rounded max-h-48 md:max-h-64"
+                        />
                       </div>
                     ) : (
                       <p className="text-sm">{message.content}</p>
@@ -625,7 +633,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
                 
                 {/* Message actions */}
                 {message.username === username && editingMessage !== message.id && (
-                  <div className="absolute right-0 top-0 -mr-16 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
+                  <div className="absolute right-0 top-0 -mr-12 md:-mr-16 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
                     <button
                       onClick={() => handleEditMessage(message.id, message.content)}
                       className="p-1 text-gray-600 hover:text-blue-600 bg-white rounded shadow"
@@ -661,7 +669,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
 
       {/* Message Input */}
       <div className="bg-white border-t border-gray-200 p-4">
-        <form onSubmit={handleSendMessage} className="flex space-x-3">
+        <form onSubmit={handleSendMessage} className="flex space-x-2 md:space-x-3">
           <div className="flex-1 relative">
             <input
               type="text"
@@ -671,38 +679,38 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
                 handleTyping();
               }}
               placeholder="Type your message..."
-              className="w-full px-4 py-2 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 md:px-4 py-2 pr-16 md:pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base"
               disabled={!isConnected}
             />
             
-            <div className="absolute right-2 top-2 flex space-x-1">
+            <div className="absolute right-2 top-2 flex space-x-0.5 md:space-x-1">
               <button
                 type="button"
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
+                className="p-0.5 md:p-1 text-gray-600 hover:text-blue-600 transition-colors"
               >
-                <Smile className="w-5 h-5" />
+                <Smile className="w-4 h-4 md:w-5 md:h-5" />
               </button>
               
               <button
                 type="button"
                 onClick={() => setShowGifPicker(!showGifPicker)}
-                className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
+                className="p-0.5 md:p-1 text-gray-600 hover:text-blue-600 transition-colors"
               >
-                <Gift className="w-5 h-5" />
+                <Gift className="w-4 h-4 md:w-5 md:h-5" />
               </button>
               
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
+                className="p-0.5 md:p-1 text-gray-600 hover:text-blue-600 transition-colors"
               >
-                <Paperclip className="w-5 h-5" />
+                <Paperclip className="w-4 h-4 md:w-5 md:h-5" />
               </button>
             </div>
             
             {showEmojiPicker && (
-              <div className="absolute bottom-12 right-0 z-10">
+              <div className="absolute bottom-12 right-0 z-10 scale-75 md:scale-100 origin-bottom-right">
                 <EmojiPicker onEmojiClick={handleEmojiClick} />
               </div>
             )}
@@ -718,9 +726,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
           <button
             type="submit"
             disabled={!newMessage.trim() || !isConnected}
-            className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed min-w-[44px]"
           >
-            <Send className="w-5 h-5" />
+            <Send className="w-4 h-4 md:w-5 md:h-5" />
           </button>
         </form>
         

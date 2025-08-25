@@ -94,14 +94,14 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-lg w-full max-w-4xl h-3/4 relative overflow-hidden">
+      <div className="bg-gray-900 rounded-lg w-full max-w-4xl h-full md:h-3/4 relative overflow-hidden mx-2 md:mx-0">
         {/* Header */}
         <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
           <div className="text-white">
-            <h3 className="font-medium">
+            <h3 className="font-medium text-sm md:text-base">
               {isIncoming ? `Incoming call from ${callerName}` : 'Video Call'}
             </h3>
-            <p className="text-sm text-gray-300">
+            <p className="text-xs md:text-sm text-gray-300">
               {callStatus === 'connecting' && 'Connecting...'}
               {callStatus === 'connected' && 'Connected'}
               {callStatus === 'ended' && 'Call ended'}
@@ -126,7 +126,7 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
           />
           
           {/* Local Video (picture-in-picture) */}
-          <div className="absolute top-20 right-4 w-48 h-36 bg-gray-800 rounded-lg overflow-hidden border-2 border-white">
+          <div className="absolute top-16 md:top-20 right-2 md:right-4 w-32 h-24 md:w-48 md:h-36 bg-gray-800 rounded-lg overflow-hidden border-2 border-white">
             <video
               ref={localVideoRef}
               autoPlay
@@ -143,51 +143,51 @@ const VideoCallModal: React.FC<VideoCallModalProps> = ({
         </div>
 
         {/* Controls */}
-        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
+        <div className="absolute bottom-4 md:bottom-8 left-1/2 transform -translate-x-1/2">
           {isIncoming && callStatus === 'connecting' ? (
-            <div className="flex space-x-4">
+            <div className="flex space-x-3 md:space-x-4">
               <button
                 onClick={handleAcceptCall}
-                className="bg-green-600 hover:bg-green-700 text-white p-4 rounded-full transition-colors"
+                className="bg-green-600 hover:bg-green-700 text-white p-3 md:p-4 rounded-full transition-colors"
               >
-                <Phone className="w-6 h-6" />
+                <Phone className="w-5 h-5 md:w-6 md:h-6" />
               </button>
               <button
                 onClick={onDecline || onClose}
-                className="bg-red-600 hover:bg-red-700 text-white p-4 rounded-full transition-colors"
+                className="bg-red-600 hover:bg-red-700 text-white p-3 md:p-4 rounded-full transition-colors"
               >
-                <PhoneOff className="w-6 h-6" />
+                <PhoneOff className="w-5 h-5 md:w-6 md:h-6" />
               </button>
             </div>
           ) : (
-            <div className="flex space-x-4">
+            <div className="flex space-x-2 md:space-x-4">
               <button
                 onClick={toggleVideo}
-                className={`p-4 rounded-full transition-colors ${
+                className={`p-3 md:p-4 rounded-full transition-colors ${
                   isVideoEnabled 
                     ? 'bg-gray-600 hover:bg-gray-700 text-white' 
                     : 'bg-red-600 hover:bg-red-700 text-white'
                 }`}
               >
-                {isVideoEnabled ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
+                {isVideoEnabled ? <Video className="w-5 h-5 md:w-6 md:h-6" /> : <VideoOff className="w-5 h-5 md:w-6 md:h-6" />}
               </button>
               
               <button
                 onClick={toggleAudio}
-                className={`p-4 rounded-full transition-colors ${
+                className={`p-3 md:p-4 rounded-full transition-colors ${
                   isAudioEnabled 
                     ? 'bg-gray-600 hover:bg-gray-700 text-white' 
                     : 'bg-red-600 hover:bg-red-700 text-white'
                 }`}
               >
-                {isAudioEnabled ? <Mic className="w-6 h-6" /> : <MicOff className="w-6 h-6" />}
+                {isAudioEnabled ? <Mic className="w-5 h-5 md:w-6 md:h-6" /> : <MicOff className="w-5 h-5 md:w-6 md:h-6" />}
               </button>
               
               <button
                 onClick={endCall}
-                className="bg-red-600 hover:bg-red-700 text-white p-4 rounded-full transition-colors"
+                className="bg-red-600 hover:bg-red-700 text-white p-3 md:p-4 rounded-full transition-colors"
               >
-                <PhoneOff className="w-6 h-6" />
+                <PhoneOff className="w-5 h-5 md:w-6 md:h-6" />
               </button>
             </div>
           )}
