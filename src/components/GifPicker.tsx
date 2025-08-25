@@ -12,32 +12,31 @@ const GifPicker: React.FC<GifPickerProps> = ({ onGifSelect, onClose }) => {
   const [loading, setLoading] = useState(false);
 
   // Using Giphy API (you'll need to get a free API key from developers.giphy.com)
-  const GIPHY_API_KEY = 'your_giphy_api_key_here'; // Replace with actual API key
+  const GIPHY_API_KEY = 'swdVlARVnTZtw0pAK7WrgecnjMtHYT7A';
   
   const searchGifs = async (query: string) => {
-    if (!query.trim()) {
-      setGifs([]);
-      return;
-    }
-
     setLoading(true);
     try {
-      // For demo purposes, using trending GIFs since we don't have API key
-      const trendingGifs = [
-        'https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif',
-        'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
-        'https://media.giphy.com/media/3o6Zt4HU9uwXmXSAuI/giphy.gif',
-        'https://media.giphy.com/media/l0HlvtIPzPdt2usKs/giphy.gif',
-        'https://media.giphy.com/media/3o7abAHdYvZdBNnGZq/giphy.gif',
-        'https://media.giphy.com/media/l0MYGb1LuZ3n7dRnO/giphy.gif'
-      ];
+      let apiUrl;
+      if (!query.trim()) {
+        // Get trending GIFs
+        apiUrl = `https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=20&rating=g`;
+      } else {
+        // Search GIFs
+        apiUrl = `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(query)}&limit=20&rating=g`;
+      }
       
-      setGifs(trendingGifs.map((url, index) => ({ 
-        id: index, 
-        images: { fixed_height: { url } } 
-      })));
+      const response = await fetch(apiUrl);
+      const data = await response.json();
+      
+      if (data.data) {
+        setGifs(data.data);
+      } else {
+        setGifs([]);
+      }
     } catch (error) {
       console.error('Error fetching GIFs:', error);
+      setGifs([]);
     } finally {
       setLoading(false);
     }
@@ -45,7 +44,7 @@ const GifPicker: React.FC<GifPickerProps> = ({ onGifSelect, onClose }) => {
 
   useEffect(() => {
     // Load trending GIFs on mount
-    searchGifs('trending');
+    searchGifs('');
   }, []);
 
   const handleGifClick = (gifUrl: string) => {
