@@ -159,6 +159,30 @@ io.on('connection', (socket) => {
     io.emit('new_message', message);
   });
 
+  // Handle call requests
+  socket.on('start_call', (data) => {
+    const { caller, type } = data;
+    // In a real app, you'd send this to specific users
+    // For demo, we'll broadcast to all other users
+    socket.broadcast.emit('incoming_call', { caller, type });
+  });
+
+  socket.on('accept_call', (data) => {
+    const { caller } = data;
+    // Notify the caller that call was accepted
+    io.emit('call_accepted', { caller });
+  });
+
+  socket.on('decline_call', (data) => {
+    const { caller } = data;
+    // Notify the caller that call was declined
+    io.emit('call_declined', { caller });
+  });
+
+  socket.on('end_call', () => {
+    // Notify all participants that call ended
+    io.emit('call_ended');
+  });
   // Handle message editing
   socket.on('edit_message', (data) => {
     const messageIndex = messages.findIndex(msg => msg.id === data.messageId);

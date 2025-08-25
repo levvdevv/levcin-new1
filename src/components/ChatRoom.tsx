@@ -14,17 +14,22 @@ import {
   Image,
   FileText,
   Video,
-  Download
+  Download,
+  Phone,
+  VideoIcon,
+  Gift
 } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import EmojiPicker from 'emoji-picker-react';
 import { useDropzone } from 'react-dropzone';
+import GifPicker from './GifPicker';
+import VideoCallModal from './VideoCallModal';
 
 interface Message {
   id: number;
   username: string;
   content: string;
-  type: 'text' | 'emoji' | 'attachment';
+  type: 'text' | 'emoji' | 'attachment' | 'gif';
   attachment?: {
     filename: string;
     originalName: string;
@@ -56,6 +61,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
   const [editContent, setEditContent] = useState('');
   const [readReceipts, setReadReceipts] = useState<Map<number, Set<string>>>(new Map());
   const [notifications, setNotifications] = useState<string[]>([]);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [showVideoCall, setShowVideoCall] = useState(false);
+  const [incomingCall, setIncomingCall] = useState<{
+    show: boolean;
+    caller: string;
+  }>({ show: false, caller: '' });
   
   const socketRef = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -176,6 +187,23 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
       });
     });
 
+    socketRef.current.on('incoming_call', ({ caller, type }) => {
+      setIncomingCall({ show: true, caller });
+    });
+
+    socketRef.current.on('call_accepted', () => {
+      setShowVideoCall(true);
+      setIncomingCall({ show: false, caller: '' });
+    });
+
+    socketRef.current.on('call_declined', () => {
+      setIncomingCall({ show: false, caller: '' });
+    });
+
+    socketRef.current.on('call_ended', () => {
+      setShowVideoCall(false);
+      setIncomingCall({ show: false, caller: '' });
+    });
     return () => {
       socketRef.current?.disconnect();
     };
@@ -249,6 +277,44 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
     setShowEmojiPicker(false);
   };
 
+  const handleGifSelect = (gifUrl: string) => {
+    if (socketRef.current && isConnected) {
+      socketRef.current.emit('send_message', {
+        username,
+        content: gifUrl,
+        type: 'gif',
+      });
+    }
+    setShowGifPicker(false);
+  };
+
+  const handleStartCall = (type: 'voice' | 'video') => {
+    if (socketRef.current && isConnected) {
+      // For demo, we'll just show the video call modal
+      // In a real app, you'd emit a call request to other users
+      setShowVideoCall(true);
+      
+      // Emit call request (this would go to specific users in a real app)
+      socketRef.current.emit('start_call', {
+        caller: username,
+        type,
+        // In a real app, you'd specify target users
+      });
+    }
+  };
+
+  const handleAcceptCall = () => {
+    if (socketRef.current) {
+      socketRef.current.emit('accept_call', { caller: incomingCall.caller });
+    }
+  };
+
+  const handleDeclineCall = () => {
+    if (socketRef.current) {
+      socketRef.current.emit('decline_call', { caller: incomingCall.caller });
+    }
+    setIncomingCall({ show: false, caller: '' });
+  };
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
@@ -369,6 +435,23 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
               </div>
             )}
           </div>
+          
+          {/* Call buttons */}
+          <button
+            onClick={() => handleStartCall('voice')}
+            className="p-2 text-gray-600 hover:text-green-600 transition-colors"
+            title="Start voice call"
+          >
+            <Phone className="w-5 h-5" />
+          </button>
+          
+          <button
+            onClick={() => handleStartCall('video')}
+            className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
+            title="Start video call"
+          >
+            <VideoIcon className="w-5 h-5" />
+          </button>
           
           <span className="text-sm text-gray-600">Logged in as {username}</span>
           <button
@@ -498,6 +581,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
                               {formatFileSize(message.attachment.size)}
                             </p>
                           </div>
+                        ) : message.type === 'gif' ? (
+                          <div className="space-y-2">
+                            <img
+                              src={message.content}
+                              alt="GIF"
+                              className="max-w-full h-auto rounded max-h-48"
+                            />
+                          </div>
                           <a
                             href={message.attachment.url}
                             download={message.attachment.originalName}
@@ -595,6 +686,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
               
               <button
                 type="button"
+                onClick={() => setShowGifPicker(!showGifPicker)}
+                className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
+              >
+                <Gift className="w-5 h-5" />
+              </button>
+              
+              <button
+                type="button"
                 onClick={() => fileInputRef.current?.click()}
                 className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
               >
@@ -606,6 +705,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
               <div className="absolute bottom-12 right-0 z-10">
                 <EmojiPicker onEmojiClick={handleEmojiClick} />
               </div>
+            )}
+            
+            {showGifPicker && (
+              <GifPicker
+                onGifSelect={handleGifSelect}
+                onClose={() => setShowGifPicker(false)}
+              />
             )}
           </div>
           
@@ -630,6 +736,22 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
           className="hidden"
         />
       </div>
+      
+      {/* Video Call Modal */}
+      <VideoCallModal
+        isOpen={showVideoCall}
+        onClose={() => setShowVideoCall(false)}
+      />
+      
+      {/* Incoming Call Modal */}
+      <VideoCallModal
+        isOpen={incomingCall.show}
+        onClose={() => setIncomingCall({ show: false, caller: '' })}
+        isIncoming={true}
+        callerName={incomingCall.caller}
+        onAccept={handleAcceptCall}
+        onDecline={handleDeclineCall}
+      />
     </div>
   );
 };
