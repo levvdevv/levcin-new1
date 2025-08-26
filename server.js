@@ -21,7 +21,6 @@ const io = new SocketIOServer(server, {
   pingInterval: 25000,
   upgradeTimeout: 30000,
   allowEIO3: true
-  }
 });
 
 // Create uploads directory if it doesn't exist
@@ -51,7 +50,7 @@ const upload = multer({
 // Middleware
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ["https://levcin.vercel.app", "https://levcin.vercel.app/"] 
+    ? ["https://your-app.vercel.app"] 
     : ["http://localhost:5173"],
   credentials: true
 }));
@@ -193,6 +192,7 @@ io.on('connection', (socket) => {
     // Notify all participants that call ended
     io.emit('call_ended');
   });
+
   // Handle message editing
   socket.on('edit_message', (data) => {
     const messageIndex = messages.findIndex(msg => msg.id === data.messageId);
