@@ -11,7 +11,7 @@ const server = createServer(app);
 const io = new SocketIOServer(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production' 
-      ? ["https://your-app.vercel.app"] 
+      ? ["https://levcin.vercel.app/"] 
       : ["http://localhost:5173"],
     methods: ["GET", "POST"],
     credentials: true
