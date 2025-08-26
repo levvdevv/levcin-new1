@@ -5,13 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "start-server": "node server.js",
     "stop-server": "ps aux | grep \"node server.js\" | grep -v grep | awk '{print $2}' | xargs -r kill",
-    "start": "node server.js",
-    "vercel-build": "npm run build"
+    "start": "node server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
