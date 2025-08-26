@@ -19,28 +19,25 @@ import {
   VideoIcon,
   Gift
 } from 'lucide-react';
-import { io, Socket } from 'socket.io-client';
 import EmojiPicker from 'emoji-picker-react';
 import { useDropzone } from 'react-dropzone';
 import GifPicker from './GifPicker';
 import VideoCallModal from './VideoCallModal';
-
-interface Message {
-  id: number;
-  username: string;
-  content: string;
-  type: 'text' | 'emoji' | 'attachment' | 'gif';
-  attachment?: {
-    filename: string;
-    originalName: string;
-    size: number;
-    mimetype: string;
-    url: string;
-  };
-  timestamp: string;
-  edited: boolean;
-  editedAt?: string;
-}
+import {
+  Message,
+  User,
+  sendMessage,
+  subscribeToMessages,
+  editMessage,
+  deleteMessage,
+  markMessageAsRead,
+  updateUserStatus,
+  updateTypingStatus,
+  subscribeToUsers,
+  uploadFile,
+  searchMessages
+} from '../services/chatService';
+import { Timestamp } from 'firebase/firestore';
 
 interface ChatRoomProps {
   username: string;
@@ -50,16 +47,13 @@ interface ChatRoomProps {
 const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [isConnected, setIsConnected] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Message[]>([]);
   const [showSearch, setShowSearch] = useState(false);
-  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
-  const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const [editingMessage, setEditingMessage] = useState<number | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [editingMessage, setEditingMessage] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
-  const [readReceipts, setReadReceipts] = useState<Map<number, Set<string>>>(new Map());
   const [notifications, setNotifications] = useState<string[]>([]);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [showVideoCall, setShowVideoCall] = useState(false);
@@ -68,12 +62,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
     caller: string;
   }>({ show: false, caller: '' });
   
-  const socketRef = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [connectionAttempts, setConnectionAttempts] = useState(0);
 
   // Request notification permission
   useEffect(() => {
@@ -87,31 +78,21 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
     const file = acceptedFiles[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
+      const fileData = await uploadFile(file);
+      
+      await sendMessage({
+        username,
+        content: `Shared ${fileData.originalName}`,
+        type: 'attachment',
+        attachment: fileData,
+        edited: false
       });
-
-      if (response.ok) {
-        const fileData = await response.json();
-        
-        if (socketRef.current && isConnected) {
-          socketRef.current.emit('send_message', {
-            username,
-            content: `Shared ${fileData.originalName}`,
-            type: 'attachment',
-            attachment: fileData,
-          });
-        }
-      }
     } catch (error) {
       console.error('File upload failed:', error);
+      alert('File upload failed. Please try again.');
     }
-  }, [username, isConnected]);
+  }, [username]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -120,123 +101,29 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
   });
 
   useEffect(() => {
-    // Initialize socket connection
-    socketRef.current = io({
-      transports: ['websocket', 'polling'], // Allow fallback to polling
-      timeout: 20000,
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
-      maxReconnectionAttempts: 10
-    });
+    // Set user as online
+    updateUserStatus(username, 'online');
 
-    socketRef.current.on('connect', () => {
-      setIsConnected(true);
-      setConnectionAttempts(0);
-      socketRef.current?.emit('join', username);
-    });
-
-    socketRef.current.on('disconnect', () => {
-      setIsConnected(false);
-      // Auto-reconnect after delay
-      if (connectionAttempts < 5) {
-        reconnectTimeoutRef.current = setTimeout(() => {
-          setConnectionAttempts(prev => prev + 1);
-          socketRef.current?.connect();
-        }, 2000 + (connectionAttempts * 1000));
-      }
-    });
-
-    socketRef.current.on('connect_error', (error) => {
-      console.log('Connection error:', error);
-      setIsConnected(false);
-    });
-
-    socketRef.current.on('reconnect', (attemptNumber) => {
-      console.log('Reconnected after', attemptNumber, 'attempts');
-      setIsConnected(true);
-      setConnectionAttempts(0);
-    });
-
-    socketRef.current.on('chat_history', (history: Message[]) => {
-      setMessages(history);
-    });
-
-    socketRef.current.on('new_message', (message: Message) => {
-      setMessages(prev => [...prev, message]);
+    // Subscribe to messages
+    const unsubscribeMessages = subscribeToMessages((newMessages) => {
+      setMessages(newMessages);
       
-      // Show notification if message is from another user
-      if (message.username !== username) {
-        showNotification(message.username, message.content);
-        setNotifications(prev => [...prev, `New message from ${message.username}`]);
+      // Show notification for new messages from other users
+      const lastMessage = newMessages[newMessages.length - 1];
+      if (lastMessage && lastMessage.username !== username) {
+        showNotification(lastMessage.username, lastMessage.content);
+        setNotifications(prev => [...prev, `New message from ${lastMessage.username}`]);
       }
     });
 
-    socketRef.current.on('online_users', (users: [string, string][]) => {
-      setOnlineUsers(users.filter(([_, status]) => status === 'online').map(([user]) => user));
-    });
+    // Subscribe to users
+    const unsubscribeUsers = subscribeToUsers(setUsers);
 
-    socketRef.current.on('user_status_update', ({ username: user, status }) => {
-      if (status === 'online') {
-        setOnlineUsers(prev => [...prev.filter(u => u !== user), user]);
-      } else {
-        setOnlineUsers(prev => prev.filter(u => u !== user));
-      }
-    });
-
-    socketRef.current.on('user_typing', (user: string) => {
-      setTypingUsers(prev => [...prev.filter(u => u !== user), user]);
-    });
-
-    socketRef.current.on('user_stopped_typing', (user: string) => {
-      setTypingUsers(prev => prev.filter(u => u !== user));
-    });
-
-    socketRef.current.on('message_edited', ({ messageId, newContent, editedAt }) => {
-      setMessages(prev => prev.map(msg => 
-        msg.id === messageId 
-          ? { ...msg, content: newContent, edited: true, editedAt }
-          : msg
-      ));
-    });
-
-    socketRef.current.on('message_deleted', (messageId: number) => {
-      setMessages(prev => prev.filter(msg => msg.id !== messageId));
-    });
-
-    socketRef.current.on('message_read', ({ messageId, readBy }) => {
-      setReadReceipts(prev => {
-        const newReceipts = new Map(prev);
-        if (!newReceipts.has(messageId)) {
-          newReceipts.set(messageId, new Set());
-        }
-        newReceipts.get(messageId)?.add(readBy);
-        return newReceipts;
-      });
-    });
-
-    socketRef.current.on('incoming_call', ({ caller, type }) => {
-      setIncomingCall({ show: true, caller });
-    });
-
-    socketRef.current.on('call_accepted', () => {
-      setShowVideoCall(true);
-      setIncomingCall({ show: false, caller: '' });
-    });
-
-    socketRef.current.on('call_declined', () => {
-      setIncomingCall({ show: false, caller: '' });
-    });
-
-    socketRef.current.on('call_ended', () => {
-      setShowVideoCall(false);
-      setIncomingCall({ show: false, caller: '' });
-    });
+    // Set user as offline when component unmounts
     return () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      socketRef.current?.disconnect();
+      updateUserStatus(username, 'offline');
+      unsubscribeMessages();
+      unsubscribeUsers();
     };
   }, [username]);
 
@@ -249,9 +136,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
-          const messageId = parseInt(entry.target.getAttribute('data-message-id') || '0');
-          if (messageId && socketRef.current) {
-            socketRef.current.emit('mark_as_read', { messageId, username });
+          const messageId = entry.target.getAttribute('data-message-id');
+          if (messageId) {
+            markMessageAsRead(messageId, username);
           }
         }
       });
@@ -276,31 +163,38 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newMessage.trim() && socketRef.current && isConnected) {
-      socketRef.current.emit('send_message', {
-        username,
-        content: newMessage.trim(),
-        type: 'text',
-      });
-      setNewMessage('');
-      setShowEmojiPicker(false);
+    if (newMessage.trim()) {
+      try {
+        await sendMessage({
+          username,
+          content: newMessage.trim(),
+          type: 'text',
+          edited: false
+        });
+        setNewMessage('');
+        setShowEmojiPicker(false);
+        
+        // Stop typing
+        updateTypingStatus(username, false);
+      } catch (error) {
+        console.error('Failed to send message:', error);
+        alert('Failed to send message. Please try again.');
+      }
     }
   };
 
   const handleTyping = () => {
-    if (socketRef.current) {
-      socketRef.current.emit('typing', username);
-      
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-      
-      typingTimeoutRef.current = setTimeout(() => {
-        socketRef.current?.emit('stop_typing', username);
-      }, 1000);
+    updateTypingStatus(username, true);
+    
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
     }
+    
+    typingTimeoutRef.current = setTimeout(() => {
+      updateTypingStatus(username, false);
+    }, 1000);
   };
 
   const handleEmojiClick = (emojiData: any) => {
@@ -308,44 +202,34 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
     setShowEmojiPicker(false);
   };
 
-  const handleGifSelect = (gifUrl: string) => {
-    if (socketRef.current && isConnected) {
-      socketRef.current.emit('send_message', {
+  const handleGifSelect = async (gifUrl: string) => {
+    try {
+      await sendMessage({
         username,
         content: gifUrl,
         type: 'gif',
+        edited: false
       });
+    } catch (error) {
+      console.error('Failed to send GIF:', error);
     }
     setShowGifPicker(false);
   };
 
   const handleStartCall = (type: 'voice' | 'video') => {
-    if (socketRef.current && isConnected) {
-      // For demo, we'll just show the video call modal
-      // In a real app, you'd emit a call request to other users
-      setShowVideoCall(true);
-      
-      // Emit call request (this would go to specific users in a real app)
-      socketRef.current.emit('start_call', {
-        caller: username,
-        type,
-        // In a real app, you'd specify target users
-      });
-    }
+    // For demo, we'll just show the video call modal
+    setShowVideoCall(true);
   };
 
   const handleAcceptCall = () => {
-    if (socketRef.current) {
-      socketRef.current.emit('accept_call', { caller: incomingCall.caller });
-    }
+    setShowVideoCall(true);
+    setIncomingCall({ show: false, caller: '' });
   };
 
   const handleDeclineCall = () => {
-    if (socketRef.current) {
-      socketRef.current.emit('decline_call', { caller: incomingCall.caller });
-    }
     setIncomingCall({ show: false, caller: '' });
   };
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
@@ -353,39 +237,55 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
     }
 
     try {
-      const response = await fetch(`/api/search?query=${encodeURIComponent(searchQuery)}`);
-      const results = await response.json();
+      const results = await searchMessages(searchQuery);
       setSearchResults(results);
     } catch (error) {
       console.error('Search failed:', error);
     }
   };
 
-  const handleEditMessage = (messageId: number, content: string) => {
+  const handleEditMessage = (messageId: string, content: string) => {
     setEditingMessage(messageId);
     setEditContent(content);
   };
 
-  const handleSaveEdit = () => {
-    if (editingMessage && editContent.trim() && socketRef.current) {
-      socketRef.current.emit('edit_message', {
-        messageId: editingMessage,
-        username,
-        newContent: editContent.trim(),
-      });
-      setEditingMessage(null);
-      setEditContent('');
+  const handleSaveEdit = async () => {
+    if (editingMessage && editContent.trim()) {
+      try {
+        await editMessage(editingMessage, editContent.trim(), username);
+        setEditingMessage(null);
+        setEditContent('');
+      } catch (error) {
+        console.error('Failed to edit message:', error);
+        alert('Failed to edit message. Please try again.');
+      }
     }
   };
 
-  const handleDeleteMessage = (messageId: number) => {
-    if (socketRef.current && window.confirm('Are you sure you want to delete this message?')) {
-      socketRef.current.emit('delete_message', { messageId, username });
+  const handleDeleteMessage = async (messageId: string) => {
+    if (window.confirm('Are you sure you want to delete this message?')) {
+      try {
+        await deleteMessage(messageId);
+      } catch (error) {
+        console.error('Failed to delete message:', error);
+        alert('Failed to delete message. Please try again.');
+      }
     }
   };
 
-  const formatTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString('en-US', {
+  const formatTime = (timestamp: Timestamp | any) => {
+    if (!timestamp) return '';
+    
+    let date: Date;
+    if (timestamp.toDate) {
+      date = timestamp.toDate();
+    } else if (timestamp.seconds) {
+      date = new Date(timestamp.seconds * 1000);
+    } else {
+      date = new Date(timestamp);
+    }
+    
+    return date.toLocaleTimeString('en-US', {
       hour: '2-digit',
       minute: '2-digit',
     });
@@ -405,6 +305,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const onlineUsers = users.filter(user => user.status === 'online');
+  const typingUsers = users.filter(user => user.typing && user.username !== username);
+
   return (
     <div className="h-screen bg-gray-50 flex flex-col">
       
@@ -415,9 +318,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
             <MessageCircle className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-gray-900">Enhanced Chat</h1>
+            <h1 className="text-lg font-semibold text-gray-900">Firestore Chat</h1>
             <p className="text-sm text-gray-500">
-              {isConnected ? `${onlineUsers.length} online` : connectionAttempts > 0 ? `Reconnecting... (${connectionAttempts}/5)` : 'Connecting...'}
+              {onlineUsers.length} online
             </p>
           </div>
         </div>
@@ -515,9 +418,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
           <span>Online:</span>
           <div className="flex items-center space-x-2 whitespace-nowrap">
             {onlineUsers.map((user, index) => (
-              <span key={user} className="flex items-center">
+              <span key={user.username} className="flex items-center">
                 <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
-                {user}
+                {user.username}
                 {index < onlineUsers.length - 1 && <span className="mx-1">,</span>}
               </span>
             ))}
@@ -652,7 +555,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
                     {/* Read receipts */}
                     {message.username === username && (
                       <div className="flex items-center justify-end mt-1 space-x-1">
-                        {readReceipts.get(message.id)?.size ? (
+                        {message.readBy && message.readBy.length > 1 ? (
                           <CheckCheck className="w-3 h-3 text-blue-300" />
                         ) : (
                           <Check className="w-3 h-3 text-blue-300" />
@@ -689,7 +592,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
           <div className="flex justify-start">
             <div className="bg-gray-200 px-4 py-2 rounded-lg">
               <p className="text-sm text-gray-600">
-                {typingUsers.join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing...
+                {typingUsers.map(u => u.username).join(', ')} {typingUsers.length === 1 ? 'is' : 'are'} typing...
               </p>
             </div>
           </div>
@@ -711,7 +614,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
               }}
               placeholder="Type your message..."
               className="w-full px-3 md:px-4 py-2 pr-16 md:pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm md:text-base"
-              disabled={!isConnected}
             />
             
             <div className="absolute right-2 top-2 flex space-x-0.5 md:space-x-1">
@@ -756,7 +658,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
           
           <button
             type="submit"
-            disabled={!newMessage.trim() || !isConnected}
+            disabled={!newMessage.trim()}
             className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed min-w-[44px]"
           >
             <Send className="w-4 h-4 md:w-5 md:h-5" />

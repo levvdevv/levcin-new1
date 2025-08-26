@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User, Lock, LogIn } from 'lucide-react';
+import { login } from '../services/authService';
 
 interface LoginFormProps {
   onLogin: (username: string) => void;
@@ -17,20 +18,12 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLogin }) => {
     setError('');
 
     try {
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
-      });
-
-      const data = await response.json();
+      const data = await login(username, password);
 
       if (data.success) {
         onLogin(username);
       } else {
-        setError('Invalid username or password');
+        setError(data.message || 'Invalid username or password');
       }
     } catch (err) {
       setError('Connection error. Please try again.');
