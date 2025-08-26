@@ -72,6 +72,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [connectionAttempts, setConnectionAttempts] = useState(0);
 
   // Request notification permission
   useEffect(() => {
@@ -119,15 +121,41 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
 
   useEffect(() => {
     // Initialize socket connection
-    socketRef.current = io();
+    socketRef.current = io({
+      transports: ['websocket', 'polling'], // Allow fallback to polling
+      timeout: 20000,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+      maxReconnectionAttempts: 10
+    });
 
     socketRef.current.on('connect', () => {
       setIsConnected(true);
+      setConnectionAttempts(0);
       socketRef.current?.emit('join', username);
     });
 
     socketRef.current.on('disconnect', () => {
       setIsConnected(false);
+      // Auto-reconnect after delay
+      if (connectionAttempts < 5) {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          setConnectionAttempts(prev => prev + 1);
+          socketRef.current?.connect();
+        }, 2000 + (connectionAttempts * 1000));
+      }
+    });
+
+    socketRef.current.on('connect_error', (error) => {
+      console.log('Connection error:', error);
+      setIsConnected(false);
+    });
+
+    socketRef.current.on('reconnect', (attemptNumber) => {
+      console.log('Reconnected after', attemptNumber, 'attempts');
+      setIsConnected(true);
+      setConnectionAttempts(0);
     });
 
     socketRef.current.on('chat_history', (history: Message[]) => {
@@ -205,6 +233,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
       setIncomingCall({ show: false, caller: '' });
     });
     return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
       socketRef.current?.disconnect();
     };
   }, [username]);
@@ -386,7 +417,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ username, onLogout }) => {
           <div>
             <h1 className="text-lg font-semibold text-gray-900">Enhanced Chat</h1>
             <p className="text-sm text-gray-500">
-              {isConnected ? `${onlineUsers.length} online` : 'Connecting...'}
+              {isConnected ? `${onlineUsers.length} online` : connectionAttempts > 0 ? `Reconnecting... (${connectionAttempts}/5)` : 'Connecting...'}
             </p>
           </div>
         </div>

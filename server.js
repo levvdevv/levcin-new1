@@ -11,10 +11,16 @@ const server = createServer(app);
 const io = new SocketIOServer(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production' 
-      ? ["https://levcin.vercel.app/"] 
+      ? ["https://levcin.vercel.app", "https://levcin.vercel.app/"] 
       : ["http://localhost:5173"],
     methods: ["GET", "POST"],
     credentials: true
+  },
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  upgradeTimeout: 30000,
+  allowEIO3: true
   }
 });
 
@@ -45,7 +51,7 @@ const upload = multer({
 // Middleware
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ["https://your-app.vercel.app"] 
+    ? ["https://levcin.vercel.app", "https://levcin.vercel.app/"] 
     : ["http://localhost:5173"],
   credentials: true
 }));

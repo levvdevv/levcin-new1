@@ -5,11 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && npm run build:server",
+    "build:server": "echo 'Server build complete'",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start-server": "node server.js",
-    "stop-server": "ps aux | grep \"node server.js\" | grep -v grep | awk '{print $2}' | xargs -r kill",
     "start": "node server.js"
   },
   "dependencies": {
